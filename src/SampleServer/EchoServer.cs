@@ -3,6 +3,7 @@ using Channels.Networking.Libuv;
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading.Tasks;
 
 namespace SampleServer
 {
@@ -38,7 +39,7 @@ namespace SampleServer
             }
             return count;
         }
-        private async void OnConnection(UvTcpConnection connection)
+        private async Task OnConnection(UvTcpConnection connection)
         {
             try
             {
@@ -49,7 +50,7 @@ namespace SampleServer
                 }
                 while(true)
                 {
-                    ReadableBuffer request;
+                    ChannelReadResult request;
 
                     Console.WriteLine("[server] awaiting input...");
                     try
@@ -60,15 +61,15 @@ namespace SampleServer
                     {
                         Console.WriteLine("[server] await completed");
                     }
-                    if (request.IsEmpty && connection.Input.Reading.IsCompleted) break;
+                    if (request.Buffer.IsEmpty && request.IsCompleted) break;
 
-                    int len = request.Length;
+                    int len = request.Buffer.Length;
                     Console.WriteLine($"[server] echoing {len} bytes...");
                     var response = connection.Output.Alloc();
-                    response.Append(ref request);
+                    response.Append(request.Buffer);
                     await response.FlushAsync();
                     Console.WriteLine($"[server] echoed");
-                    connection.Input.Advance(request.End);
+                    connection.Input.Advance(request.Buffer.End);
                 }
                 Close(connection);          
             }

@@ -183,7 +183,7 @@ namespace Channels.WebSockets
             if (key.Length != SecRequestLength) throw new ArgumentException("Invalid key length", nameof(key));
 
             byte[] arr = new byte[SecRequestLength + WebSocketKeySuffixBytes.Length];
-            key.TryCopyTo(arr);
+            key.CopyTo(arr);
             Buffer.BlockCopy( // append the magic number from RFC6455
                 WebSocketKeySuffixBytes, 0,
                 arr, SecRequestLength,

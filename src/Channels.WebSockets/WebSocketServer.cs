@@ -89,27 +89,23 @@ namespace Channels.WebSockets
         // todo: pick a more appropriate container for connection management; this insane choice is just arbitrary
         private ConcurrentDictionary<WebSocketConnection, WebSocketConnection> connections = new ConcurrentDictionary<WebSocketConnection, WebSocketConnection>();
 
-        public void StartLibuv(IPAddress ip, int port)
-        {
-            if (uvListener == null && socketListener == null)
-            {
+        public void StartLibuv(IPAddress ip, int port) {
+            if (uvListener == null && socketListener == null) {
                 uvThread = new UvThread();
                 uvListener = new UvTcpListener(uvThread, new IPEndPoint(ip, port));
                 uvListener.OnConnection(OnConnection);
                 uvListener.Start();
             }
         }
-        public void StartManagedSockets(IPAddress ip, int port, ChannelFactory channelFactory = null)
-        {
-            if (uvListener == null && socketListener == null)
-            {
+        public void StartManagedSockets(IPAddress ip, int port, ChannelFactory channelFactory = null) {
+            if (uvListener == null && socketListener == null) {
                 socketListener = new SocketListener(channelFactory);
                 socketListener.OnConnection(OnConnection);
                 socketListener.Start(new IPEndPoint(ip, port));
             }
         }
 
-        private async void OnConnection(IChannel connection)
+        private async Task OnConnection(IChannel connection)
         {
             using (connection)
             {
@@ -267,7 +263,7 @@ namespace Channels.WebSockets
             // To make it even worse, hybi-00 used Origin, so it is all over the place!
             socket.Origin = headers.GetAsciiString("Origin") ?? headers.GetAsciiString("Sec-WebSocket-Origin");
             socket.Protocol = headers.GetAsciiString("Sec-WebSocket-Protocol");
-            socket.RequestLine = request.Path.GetAsciiString();
+            socket.RequestLine = request.Path.Buffer.GetAsciiString();
             return socket;
         }
         
@@ -286,22 +282,22 @@ namespace Channels.WebSockets
         }
         internal static async Task<HttpRequest> ParseHttpRequest(IReadableChannel _input)
         {
-            ReadableBuffer Method = default(ReadableBuffer), Path = default(ReadableBuffer), HttpVersion = default(ReadableBuffer);
-            Dictionary<string, ReadableBuffer> Headers = new Dictionary<string, ReadableBuffer>();
+            PreservedBuffer Method = default(PreservedBuffer), Path = default(PreservedBuffer), HttpVersion = default(PreservedBuffer);
+            Dictionary<string, PreservedBuffer> Headers = new Dictionary<string, PreservedBuffer>();
             try
             {
                 ParsingState _state = ParsingState.StartLine;
                 bool needMoreData = true;
                 while (needMoreData)
                 {
-                    var buffer = await _input.ReadAsync();
-
+                    var readResult = await _input.ReadAsync();
+                    var buffer = readResult.Buffer;
                     var consumed = buffer.Start;
                     needMoreData = true;
 
                     try
                     {
-                        if (buffer.IsEmpty && _input.Reading.IsCompleted)
+                        if (buffer.IsEmpty && readResult.IsCompleted)
                         {
                             throw new EndOfStreamException();
                         }
@@ -431,7 +427,7 @@ namespace Channels.WebSockets
                     }
                 }
                 var result = new HttpRequest(Method, Path, HttpVersion, Headers);
-                Method = Path = HttpVersion = default(ReadableBuffer);
+                Method = Path = HttpVersion = default(PreservedBuffer);
                 Headers = null;
                 return result;
             }

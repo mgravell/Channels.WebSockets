@@ -9,12 +9,12 @@ namespace Channels.WebSockets
 {
     public struct Message : IMessageWriter
     {
-        private ReadableBuffer _buffer;
-        private List<ReadableBuffer> _buffers;
+        private PreservedBuffer _buffer;
+        private List<PreservedBuffer> _buffers;
         private int _mask;
         private string _text;
         public bool IsFinal { get; }
-        internal Message(ReadableBuffer buffer, int mask, bool isFinal)
+        internal Message(PreservedBuffer buffer, int mask, bool isFinal)
         {
             this._buffer = buffer;
             this._mask = mask;
@@ -31,19 +31,19 @@ namespace Channels.WebSockets
                 foreach (var buffer in _buffers)
                 {
                     var tmp = buffer;
-                    write.Append(ref tmp);
+                    write.Append(tmp.Buffer);
                 }
             }
             else
             {
                 ApplyMask();
-                write.Append(ref _buffer);
+                write.Append(_buffer.Buffer);
             }
             return write.FlushAsync();
 
         }
 
-        internal Message(List<ReadableBuffer> buffers)
+        internal Message(List<PreservedBuffer> buffers)
         {
             _mask = 0;
             _text = null;
@@ -55,7 +55,7 @@ namespace Channels.WebSockets
             }
             else
             {
-                _buffer = default(ReadableBuffer);
+                _buffer = default(PreservedBuffer);
                 this._buffers = buffers;
             }
         }
@@ -63,7 +63,8 @@ namespace Channels.WebSockets
         {
             if (_mask != 0)
             {
-                WebSocketsFrame.ApplyMask(ref _buffer, _mask);
+                var tmp = _buffer.Buffer;
+                WebSocketsFrame.ApplyMask(ref tmp, _mask);
                 _mask = 0;
             }
         }
@@ -75,10 +76,10 @@ namespace Channels.WebSockets
             var buffers = this._buffers;
             if (buffers == null)
             {
-                if (_buffer.Length == 0) return _text = "";
+                if (_buffer.Buffer.Length == 0) return _text = "";
 
                 ApplyMask();
-                return _text = _buffer.GetUtf8String();
+                return _text = _buffer.Buffer.GetUtf8String();
             }
             return _text = GetText(buffers);
         }
@@ -86,7 +87,7 @@ namespace Channels.WebSockets
         private static readonly Encoding Utf8Encoding = Encoding.UTF8;
         private static Decoder Utf8Decoder;
 
-        private static string GetText(List<ReadableBuffer> buffers)
+        private static string GetText(List<PreservedBuffer> buffers)
         {
             // try to re-use a shared decoder; note that in heavy usage, we might need to allocate another
             var decoder = (Decoder)Interlocked.Exchange<Decoder>(ref Utf8Decoder, null);
@@ -94,7 +95,7 @@ namespace Channels.WebSockets
             else decoder.Reset();
 
             var length = 0;
-            foreach (var buffer in buffers) length += buffer.Length;
+            foreach (var buffer in buffers) length += buffer.Buffer.Length;
 
             var capacity = length; // worst case is 1 byte per char
             var chars = new char[capacity];
@@ -105,7 +106,7 @@ namespace Channels.WebSockets
             bool completed;
             foreach (var buffer in buffers)
             {
-                foreach (var span in buffer)
+                foreach (var span in buffer.Buffer)
                 {
                     ArraySegment<byte> segment;
                     if(!span.TryGetArray(out segment))
@@ -139,14 +140,14 @@ namespace Channels.WebSockets
             if (len == 0) return NilBytes;
 
             ApplyMask();
-            return _buffer.ToArray();
+            return _buffer.Buffer.ToArray();
         }
         public int GetPayloadLength()
         {
             var buffers = this._buffers;
-            if (buffers == null) return _buffer.Length;
+            if (buffers == null) return _buffer.Buffer.Length;
             int count = 0;
-            foreach (var buffer in buffers) count += buffer.Length;
+            foreach (var buffer in buffers) count += buffer.Buffer.Length;
             return count;
         }
 
@@ -156,7 +157,7 @@ namespace Channels.WebSockets
             if (buffers == null)
             {
                 ApplyMask();
-                destination.Append(ref _buffer);
+                destination.Append(_buffer.Buffer);
             }
             else
             {
@@ -166,8 +167,8 @@ namespace Channels.WebSockets
                     ReadableBuffer tmp;
                     while (iter.MoveNext())
                     {
-                        tmp = iter.Current;
-                        destination.Append(ref tmp);
+                        tmp = iter.Current.Buffer;
+                        destination.Append(tmp);
                     }
                 }
             }

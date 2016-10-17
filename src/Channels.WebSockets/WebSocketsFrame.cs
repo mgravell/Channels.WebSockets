@@ -134,7 +134,11 @@ namespace Channels.WebSockets
                 // note: this is an optimized xor implementation using Vector<byte>, qword hacks, etc; unsafe access
                 // to the span  is warranted
                 // note: in this case, we know we're talking about memory from the pool, so we know it is already pinned
-                m = ApplyMask((byte*)span.UnsafePointer, span.Length, m);
+                void* ptr;
+                if (span.TryGetPointer(out ptr))
+                {
+                    m = ApplyMask((byte*)ptr, span.Length, m);
+                }
             }
         }
 

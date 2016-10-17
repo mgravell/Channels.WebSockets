@@ -56,14 +56,16 @@ namespace Channels.WebSockets
         {
             while (true)
             {
-                var buffer = await connection.Input.ReadAsync();
+                var readResult = await connection.Input.ReadAsync();
+                var buffer = readResult.Buffer;
                 try
                 {
-                    if (buffer.IsEmpty && connection.Input.Reading.IsCompleted)
+                    if (buffer.IsEmpty && readResult.IsCompleted)
                     {
                         break; // that's all, folks
                     }
                     WebSocketsFrame frame;
+                    
                     if (WebSocketProtocol.TryReadFrameHeader(ref buffer, out frame))
                     {
                         int payloadLength = frame.PayloadLength;
@@ -148,7 +150,8 @@ namespace Channels.WebSockets
                     return TaskResult.True;
                 }
             }
-            msg = new Message(buffer.Slice(0, frame.PayloadLength), frame.Mask, frame.IsFinal);
+            var preserved = buffer.Slice(0, frame.PayloadLength).Preserve();
+            msg = new Message(preserved, frame.Mask, frame.IsFinal);
             if (server != null)
             {
                 return OnServerAndConnectionFrameReceivedImplAsync(opCode, msg, server);
@@ -222,7 +225,7 @@ namespace Channels.WebSockets
         }
 
 
-        volatile List<ReadableBuffer> backlog;
+        volatile List<PreservedBuffer> backlog;
         // TODO: not sure how to do this; basically I want to lease a writable, expandable area
         // for a duration, and be able to access it for reading, and release
         internal void AddBacklog(ref ReadableBuffer buffer, ref WebSocketsFrame frame)
@@ -237,7 +240,7 @@ namespace Channels.WebSockets
             var backlog = this.backlog;
             if (backlog == null)
             {
-                var newBacklog = new List<ReadableBuffer>();
+                var newBacklog = new List<PreservedBuffer>();
                 backlog = Interlocked.CompareExchange(ref this.backlog, newBacklog, null) ?? newBacklog;
             }
             backlog.Add(slicedBuffer.Preserve());
@@ -268,7 +271,7 @@ namespace Channels.WebSockets
 
         public bool HasBacklog => (backlog?.Count ?? 0) != 0;
 
-        internal List<ReadableBuffer> GetBacklog() => backlog;
+        internal List<PreservedBuffer> GetBacklog() => backlog;
 
         public Task SendAsync(string message, WebSocketsFrame.FrameFlags flags = WebSocketsFrame.FrameFlags.IsFinal)
         {
@@ -305,7 +308,7 @@ namespace Channels.WebSockets
         }
 
         public bool BufferFragments { get; set; } // TODO: flags bool
-        public bool IsClosed => connection.Output.Writing.IsCompleted || connection.Input.Reading.IsCompleted;
+        public bool IsClosed => connection.Output.Writing.IsCompleted; // || connection.Input.Reading.IsCompleted;
 
         public event Action Closed;
 

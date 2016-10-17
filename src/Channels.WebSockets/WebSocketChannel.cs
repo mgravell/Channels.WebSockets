@@ -21,7 +21,7 @@ namespace Channels.WebSockets
         }
         private async void SendCloseWhenOutputCompleted()
         {
-            await _output.Reading;
+            await _output.Writing;
             await _webSocket.CloseAsync();
         }
 
@@ -30,19 +30,21 @@ namespace Channels.WebSockets
             while (true)
             {
                 var data = await _output.ReadAsync();
-                if(data.IsEmpty)
+                if(data.Buffer.IsEmpty)
                 {
-                    if (_output.Reading.IsCompleted) break;
-                    _output.Advance(data.End);
+                    if (_output.Writing.IsCompleted) break;
+                    _output.Advance(data.Buffer.End);
                 }
                 else
                 {
                     // note we don't need to create a mask here - is created internally
-                    var message = new Message(data, mask: 0, isFinal: true);
+                    var preserved = data.Buffer.Preserve();
+                    var message = new Message(preserved, mask: 0, isFinal: true);
                     var send = _webSocket.SendAsync(WebSocketsFrame.OpCodes.Binary, ref message);
                     // can free up one lock on the data *before* we await...
-                    _output.Advance(data.End);
+                    _output.Advance(data.Buffer.End);
                     await send;
+                    preserved.Dispose();
                 }
             }
         }

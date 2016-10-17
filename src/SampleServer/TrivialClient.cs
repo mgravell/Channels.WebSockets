@@ -56,15 +56,15 @@ namespace SampleServer
             {
                 while (true)
                 {
-                    var buffer = await connection.Input.ReadAsync();
-                    if (buffer.IsEmpty && (connection == null || connection.Input.Reading.IsCompleted))
+                    var readResult = await connection.Input.ReadAsync();
+                    if (readResult.Buffer.IsEmpty && (connection == null || readResult.IsCompleted))
                     {
                         Console.WriteLine("[client] input ended");
                         break;
                     }
 
-                    var s = buffer.GetAsciiString();
-                    connection.Input.Advance(buffer.End, buffer.End);
+                    var s = readResult.Buffer.GetAsciiString();
+                    connection.Input.Advance(readResult.Buffer.End, readResult.Buffer.End);
 
                     Console.Write("[client] received: ");
                     Console.WriteLine(s);

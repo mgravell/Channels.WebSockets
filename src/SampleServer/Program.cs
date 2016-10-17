@@ -37,25 +37,25 @@ namespace SampleServer
             {
                 while (true)
                 {
-                    ReadableBuffer request = await channel.Input.ReadAsync();
-                    if (request.IsEmpty && channel.Input.Reading.IsCompleted)
+                    var request = await channel.Input.ReadAsync();
+                    if (request.Buffer.IsEmpty && request.IsCompleted)
                     {
-                        channel.Input.Advance(request.End);
+                        channel.Input.Advance(request.Buffer.End);
                         break;
                     }
 
-                    int len = request.Length;
+                    int len = request.Buffer.Length;
                     var response = channel.Output.Alloc();
-                    response.Append(ref request);
+                    response.Append(request.Buffer);
                     await response.FlushAsync();
-                    channel.Input.Advance(request.End);
+                    channel.Input.Advance(request.Buffer.End);
                 }
                 channel.Input.Complete();
                 channel.Output.Complete();
             }
             catch (Exception ex)
             {
-                if (!(channel.Input?.Reading?.IsCompleted ?? true)) channel.Input.Complete(ex);
+                //if (!(channel.Input?.Reading?.IsCompleted ?? true)) channel.Input.Complete(ex);
                 if (!(channel.Output?.Writing?.IsCompleted ?? true)) channel.Output.Complete(ex);
             }
             finally
@@ -83,14 +83,22 @@ namespace SampleServer
         }
         static void Main2()
         {
-            using (var factory = new ChannelFactory())
-            using (var server = new WrappedEchoWebSocketServer(factory))
+            try
             {
-                Console.WriteLine("Starting server...");
-                server.StartManagedSockets(IPAddress.Loopback, 6080, factory);
-                RunClientAsync(factory);
+                using (var factory = new ChannelFactory())
+                using (var server = new WrappedEchoWebSocketServer(factory))
+                {
+                    Console.WriteLine("Starting server...");
+                    server.StartManagedSockets(IPAddress.Loopback, 6080, factory);
+                    RunClientAsync(factory);
 
-                Console.WriteLine("Press any key");
+                    Console.WriteLine("Press any key");
+                    Console.ReadKey();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
                 Console.ReadKey();
             }
         }
@@ -119,15 +127,15 @@ namespace SampleServer
             {
                 var input = await channel.Input.ReadAsync();
                 // wait for the end of the data before processing anything
-                if (channel.Input.Reading.IsCompleted)
+                if (input.IsCompleted)
                 {
-                    string reply = input.GetUtf8String();
-                    channel.Input.Advance(input.End);
+                    string reply = input.Buffer.GetUtf8String();
+                    channel.Input.Advance(input.Buffer.End);
                     return reply;
                 }
                 else
                 {
-                    channel.Input.Advance(input.Start, input.End);
+                    channel.Input.Advance(input.Buffer.Start, input.Buffer.End);
                 }
             }
         }
@@ -163,8 +171,10 @@ namespace SampleServer
             } catch(Exception ex)
             {
                 WriteError(ex);
+                Console.ReadKey();
                 return -1;
             }
+            
         }
 
         private static void TestOpenAndCloseListener()
@@ -172,7 +182,7 @@ namespace SampleServer
             var thread = new UvThread();
             var ep = new IPEndPoint(IPAddress.Loopback, 5003);
             var listener = new UvTcpListener(thread, ep);
-            listener.OnConnection(_ => Console.WriteLine("Hi and bye"));
+            listener.OnConnection(_ => Task.Run(() => Console.WriteLine("Hi and bye")));
             listener.Start();
             Console.WriteLine("Listening...");
             Thread.Sleep(1000);
