@@ -334,7 +334,7 @@ namespace Channels.WebSockets
             where T : struct, IMessageWriter
         {
             int payloadLength = message.GetPayloadLength();
-            var buffer = connection.Connection.Output.Alloc(MaxHeaderLength + payloadLength);
+            var buffer = connection.Connection.Output.Alloc(MaxHeaderLength);
             int mask = connection.ConnectionType == ConnectionType.Client ? CreateMask() : 0;
             WriteFrameHeader(ref buffer, WebSocketsFrame.FrameFlags.IsFinal, opCode, payloadLength, mask);
             if (payloadLength != 0)
